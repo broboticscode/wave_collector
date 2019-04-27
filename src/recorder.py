@@ -3,22 +3,24 @@ import roslib
 import numpy as np
 import tf.transformations
 from geometry_msgs.msg import Twist
-
+import os
 from sensor_msgs.msg import Image
 # from geometry_msgs.msg import PoseStamped
 from cv_bridge import CvBridge, CvBridgeError
 from nav_msgs.msg import Path
 import cv2
+from rospy_message_converter import json_message_converter
+import json
 
 
 class Recorder:
     def __init__(self):
         rospy.init_node('cmd_vel_listener')
-        rospy.Subscriber("/mobile_base_controller/cmd_vel", Twist, velocity)
-        rospy.Subscriber("/webcam/image_raw", Image, image_raw)
+        rospy.Subscriber("/mobile_base_controller/cmd_vel", Twist, self.velocity)
+        rospy.Subscriber("/webcam/image_raw", Image, self.image_raw)
 
         # rospy.init_node("lane_detector")
-        # self.bridge = CvBridge()
+        self.bridge = CvBridge()
 
         # subscribe to images
         # rospy.Subscriber("left/image_rect_color", Image, self.on_left_image)
@@ -29,8 +31,9 @@ class Recorder:
         self.image = None
         self.linear = None
         self.angular = None
+        self.twist = None
         #No publishing just yet
-        #self.publish()
+        self.publish()
         rospy.spin()
 
     def velocity(self, msg):
@@ -38,6 +41,7 @@ class Recorder:
         rospy.loginfo("Angular Components: [%f, %f, %f]"%(msg.angular.x, msg.angular.y, msg.angular.z))
         self.linear = msg.linear
         self.angular = msg.angular
+        self.twist = msg
     def image_raw(self, msg):
         rospy.loginfo("Captured image")
         self.image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
@@ -54,12 +58,29 @@ class Recorder:
 
     def publish(self):
         rate = rospy.Rate(20)
+        count = 0
+        randint = round(np.random.rand(), 5)
+        save_path=os.path.join("images",str(randint))
+        os.mkdir(save_path)
+
         while not rospy.is_shutdown():
-            if self.left_image is not None and self.steer is not None and self.speed < 0:
-                randint = round(np.random.rand(), 5)
+
+            if self.image is not None and self.linear is not None and self.angular is not None:
+                rospy.loginfo("All vars initialised")
+
                 try:
-                    rospy.logwarn("saving image with steer: %s, speed: %s", self.steer, self.speed)
-                    cv2.imwrite("./" + str(randint) + "-leftimage_" + str(self.steer) + ".jpg", self.left_image)
+                    rospy.logwarn("saving image %s", count)
+                    # cv2.imshow('image',self.image)
+                    # cv2.waitKey(0)
+
+                    image_path = os.path.join(save_path,str(count) + ".jpg")
+                    cv2.imwrite(image_path, self.image)
+                    json_str = json_message_converter.convert_ros_message_to_json(self.twist)
+                    rospy.loginfo(json_str)
+
+                    with open('data.json', 'w') as outfile:
+                         json.dump(json_str, outfile)
+                    count+=1
                 except Exception as e:
                     rospy.logerr(e)
 
