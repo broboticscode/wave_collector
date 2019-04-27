@@ -59,8 +59,8 @@ class Recorder:
     def publish(self):
         rate = rospy.Rate(20)
         count = 0
-        randint = round(np.random.rand(), 5)
-        save_path=os.path.join("images",str(randint))
+        dir_number = len(os.walk("images").next()[1])
+        save_path=os.path.join("images","collection_" + str(dir_number))
         os.mkdir(save_path)
 
         while not rospy.is_shutdown():
@@ -74,12 +74,15 @@ class Recorder:
                     # cv2.waitKey(0)
 
                     image_path = os.path.join(save_path,str(count) + ".jpg")
+                    json_path = os.path.join(save_path,str(count) + ".json")
+
                     cv2.imwrite(image_path, self.image)
                     json_str = json_message_converter.convert_ros_message_to_json(self.twist)
                     rospy.loginfo(json_str)
 
-                    with open('data.json', 'w') as outfile:
-                         json.dump(json_str, outfile)
+                    with open(json_path, 'w') as outfile:
+                        outfile.write(json_str)
+                         # json.dump(json_str, outfile)
                     count+=1
                 except Exception as e:
                     rospy.logerr(e)
