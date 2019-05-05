@@ -18,9 +18,10 @@ class Recorder:
         #Name of our node
         rospy.init_node('cmd_vel_listener')
         #Subscribe to topics that we want to collect data out of a rosbag or live for
-        rospy.Subscriber("/mobile_base_controller/cmd_vel", Twist, self.velocity)
-        rospy.Subscriber("/webcam/image_raw", Image, self.image_raw)
-
+        #rospy.Subscriber("/mobile_base_controller/cmd_vel", Twist, self.velocity)
+       # rospy.Subscriber("/webcam/image_raw", Image, self.image_raw)
+        rospy.Subscriber("/cmd_vel", Twist, self.velocity)
+        rospy.Subscriber("/conde_MEGA/image_raw", Image, self.image_raw)
         # rospy.init_node("lane_detector")
         #Init cvbridge so we can convert between ros images and cv2 images
         self.bridge = CvBridge()
@@ -55,7 +56,8 @@ class Recorder:
     def image_raw(self, msg):
         rospy.loginfo("Captured image")
         self.image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-
+      #  cv2.imshow('image',self.image)
+      #  cv2.waitKey(0)
     def publish(self):
         rate = rospy.Rate(20)
         count = 0
@@ -64,34 +66,40 @@ class Recorder:
         save_path=os.path.join("images","collection_" + str(dir_number))
         #Make the dir
         os.mkdir(save_path)
+        print("Saving to {}".format(save_path))
 
         #Run this publisher indefinitely
+        garbage=0
         while not rospy.is_shutdown():
 
             if self.image is not None and self.linear is not None and self.angular is not None:
                 rospy.loginfo("All vars initialised")
+                if abs(self.linear.x) >0.001 and abs(self.angular.z) > 0.001 :
+                    garbage=0
+                    if garbage>0:
+                        print("Discarded {} images which were stationary".format(garbage))
+                    try:
+                        rospy.logwarn("saving image %s in dir %s", count,dir_number)
+                        # cv2.imshow('image',self.image)
+                        # cv2.waitKey(0)
 
-                try:
-                    rospy.logwarn("saving image %s in dir %s", count,dir_number)
-                    # cv2.imshow('image',self.image)
-                    # cv2.waitKey(0)
+                        image_path = os.path.join(save_path,str(count) + ".jpg")
+                        json_path = os.path.join(save_path,str(count) + ".json")
 
-                    image_path = os.path.join(save_path,str(count) + ".jpg")
-                    json_path = os.path.join(save_path,str(count) + ".json")
+                        json_str = json_message_converter.convert_ros_message_to_json(self.twist)
+                        rospy.loginfo(json_str)
 
-                    json_str = json_message_converter.convert_ros_message_to_json(self.twist)
-                    rospy.loginfo(json_str)
+                        #Write image file and json file to disk
+                        cv2.imwrite(image_path, self.image)
 
-                    #Write image file and json file to disk
-                    cv2.imwrite(image_path, self.image)
-
-                    with open(json_path, 'w') as outfile:
-                        outfile.write(json_str)
-                         # json.dump(json_str, outfile)
-                    count+=1
-                except Exception as e:
-                    rospy.logerr(e)
-
+                        with open(json_path, 'w') as outfile:
+                            outfile.write(json_str)
+                             # json.dump(json_str, outfile)
+                        count+=1
+                    except Exception as e:
+                        rospy.logerr(e)
+                else:
+                    garbage +=1
             rate.sleep()
 
 
